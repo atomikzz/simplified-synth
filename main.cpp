@@ -87,8 +87,13 @@ public:
     {
         return _frequency;
     }
-    void Bind()
+    void writeBuffer(AudioBuffers &buffer)
     {
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            buffer[i] = (*this).generateSample();
+            std::cout << "sample frequency: " << (*this).getFrequency() << "\n";
+        }
     }
 };
 
@@ -102,21 +107,16 @@ private:
 public:
     AudioBuffers(int numSamples) : _numSamples(numSamples) { _audioBuffer.resize(numSamples); }
 
-    void generateAudioBuffer(Oscillator &osc)
-    {
-
-        for (int i = 0; i < _numSamples; ++i)
-        {
-            _audioBuffer[i] = osc.generateSample();
-            std::cout << "sample frequency: " << osc.getFrequency() << "\n";
-        }
-    }
     void printWaveform()
     {
         for (double sample : _audioBuffer)
         {
-            //   std::cout << sample << "\n";
+            std::cout << sample << "\n";
         }
+    }
+    int getNumSamples()
+    {
+        return _numSamples;
     }
 };
 
@@ -134,12 +134,13 @@ int main()
 
     Oscillator osc1(440.0, 0.5, 25000, TRIANGLE);
     AudioBuffers buffer(10);
+    osc1.writeBuffer(buffer);
 
     while (!glfwWindowShouldClose(_window))
     {
         glfwPollEvents();
 
-        buffer.generateAudioBuffer(osc1);
+        osc1.writeBuffer(buffer);
         buffer.printWaveform();
         if (glfwGetKey(_window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         {
