@@ -3,7 +3,7 @@
 #include <vector>
 #include <iostream>
 #include <GLFW/glfw3.h>
-#
+#define TOLERANCE 1e-5
 
 enum WaveformType
 {
@@ -27,51 +27,88 @@ enum Notes
     G,
     Gs
 };
+const int _sampleRate = 44100;
+const double _deltaTime = 1.0 / _sampleRate;
+const double _recordingBufferSizeMultiplier = 1200;                                                 // seconds
+const int _bufferSize = static_cast<int>(std::floor(_sampleRate * _recordingBufferSizeMultiplier)); // total number of possible samples
+double _recordingTime;                                                                              // how much time is elapsed during recording
+
+class AudioBuffers
+{
+
+public:
+    std::vector<double> _audioBuffer;
+
+    AudioBuffers() : _audioBuffer(_bufferSize) {};
+
+    std::vector<double> getAudioBuffer()
+    {
+        return _audioBuffer;
+    }
+    void writeBuffer(double sample)
+    {
+        for (int i = 0; i < _audioBuffer.size(); ++i)
+        {
+            _audioBuffer[i] = sample;
+        }
+    }
+    void readBuffer()
+    {
+        for (int i = 0; i < _audioBuffer.size(); ++i)
+        {
+            std::cout << _audioBuffer[i] << ", ";
+        }
+    }
+};
 class Oscillator
 {
 private:
-    double _frequency;      // Frequency in Hz
-    double _amplitude;      // Amplitude (0 to 1)
+    double _frequency; // Frequency in Hz
+    double _initialFrequency;
+    double _maxAmplitude;   // Amplitude (0 to 1)
     double _phase;          // Current phase
-    double _sampleRate;     // Sample rate in Hz
+                            // Sample rate in Hz
     WaveformType _waveform; // Type of waveform
+    double _waveAmplitude;
 
 public:
     Oscillator(double freq, double amp, double sampleRate, WaveformType type)
-        : _frequency(freq), _amplitude(amp), _phase(0.0), _sampleRate(sampleRate), _waveform(type) {}
+        : _frequency(freq), _maxAmplitude(amp), _phase(0.0), _waveform(type) { _initialFrequency = _frequency; }
 
     double generateSample()
     {
-        double sample = 0.0;
-
+        double waveAmplitude;
         // Generate the waveform based on the current type
         switch (_waveform)
         {
         case SINE:
-            sample = _amplitude * sin(2.0 * M_PI * _phase);
+            _waveAmplitude = _maxAmplitude * sin(2.0 * M_PI * _phase);
             break;
 
         case SQUARE:
-            sample = _amplitude * (_phase < 0.5 ? 1.0 : -1.0);
+            _waveAmplitude = _maxAmplitude * (_phase < 0.5 ? 1.0 : -1.0);
             break;
 
         case TRIANGLE:
-            sample = _amplitude * (2.0 * fabs(2.0 * (_phase - floor(_phase + 0.5))) - 1.0);
+            _waveAmplitude = _maxAmplitude * (2.0 * fabs(2.0 * (_phase - floor(_phase + 0.5))) - 1.0);
             break;
 
         case SAWTOOTH:
-            sample = _amplitude * (2.0 * (_phase - floor(_phase + 0.5)));
+            _waveAmplitude = _maxAmplitude * (2.0 * (_phase - floor(_phase + 0.5)));
             break;
         }
 
         // Update phase
         _phase += _frequency / _sampleRate;
-        if (_phase >= 1.0)
+        if ((_phase - 1.0) < TOLERANCE)
             _phase -= 1.0;
-
-        return sample;
+        waveAmplitude = _waveAmplitude;
+        return waveAmplitude;
     }
-
+    double getSampleRate()
+    {
+        return _sampleRate;
+    }
     // Change waveform type
     void setWaveform(WaveformType type)
     {
@@ -87,36 +124,13 @@ public:
     {
         return _frequency;
     }
-    void writeBuffer(AudioBuffers &buffer)
+    double getWaveAmplitude()
     {
-        for (int i = 0; i < buffer.getNumSamples(); ++i)
-        {
-            buffer[i] = (*this).generateSample();
-            std::cout << "sample frequency: " << (*this).getFrequency() << "\n";
-        }
+        return _waveAmplitude;
     }
-};
-
-class AudioBuffers
-{
-
-private:
-    std::vector<double> _audioBuffer;
-    int _numSamples;
-
-public:
-    AudioBuffers(int numSamples) : _numSamples(numSamples) { _audioBuffer.resize(numSamples); }
-
-    void printWaveform()
+    void setToInitialFrequency()
     {
-        for (double sample : _audioBuffer)
-        {
-            std::cout << sample << "\n";
-        }
-    }
-    int getNumSamples()
-    {
-        return _numSamples;
+        _initialFrequency = _frequency;
     }
 };
 
@@ -132,16 +146,14 @@ int main()
     GLFWwindow *_window = glfwCreateWindow(640, 480, "synth", nullptr, nullptr);
     glfwFocusWindow(_window);
 
-    Oscillator osc1(440.0, 0.5, 25000, TRIANGLE);
-    AudioBuffers buffer(10);
-    osc1.writeBuffer(buffer);
+    Oscillator osc1(440.0, 0.5, 44100, TRIANGLE);
+    AudioBuffers *buffer = new AudioBuffers;
 
-    while (!glfwWindowShouldClose(_window))
+    int i = 0;
+    while (!glfwWindowShouldClose(_window) && i < _bufferSize)
     {
         glfwPollEvents();
 
-        osc1.writeBuffer(buffer);
-        buffer.printWaveform();
         if (glfwGetKey(_window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         {
             glfwSetWindowShouldClose(_window, GLFW_TRUE);
@@ -150,7 +162,16 @@ int main()
         {
             osc1.setFrequency(460.0);
         }
+        // first handle input. then generate input sample. write it to buffer and print
+
+        buffer->_audioBuffer[i] = osc1.generateSample();
+        osc1.setToInitialFrequency();
+
+        i++;
     }
-    glfwDestroyWindow(_window);
-    glfwTerminate();
+    buffer->readBuffer();
+
+    delete buffer;
+    /*glfwDestroyWindow(_window);
+    glfwTerminate();*/
 }
