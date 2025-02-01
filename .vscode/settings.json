@@ -60,7 +60,9 @@
         "algorithm": "cpp",
         "set": "cpp",
         "fstream": "cpp",
-        "multiple_fit (2).C": "cpp"
+        "multiple_fit (2).C": "cpp",
+        "charconv": "cpp",
+        "forward_list": "cpp"
     },
     "makefile.configureOnOpen": true
 }
